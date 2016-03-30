@@ -424,7 +424,7 @@ def tempUnitEvent(unit) {
     } else { Logger("Temperature Unit: (${unit}) | Original State: (${tmpUnit})") }
 }
 
-def targetTempEvent(targetTemp) {
+def targetTempEvent(Double targetTemp) {
 	def temp = device.currentState("targetTemperature")?.value.toString()
 	def rTargetTemp = wantMetric() ? targetTemp.round(1) : targetTemp.round(0).toInteger()
 	if(!temp.equals(rTargetTemp.toString())) {
@@ -844,23 +844,20 @@ void setHeatingSetpoint(temp) {
 void setHeatingSetpoint(Double reqtemp) {
 	log.trace "setHeatingSetpoint()... ($reqtemp)"
 	def hvacMode = getHvacMode()
+    def tempUnit = state?.tempUnit
 	def temp = 0.0
-	if (wantMetric()) {
-		temp = Math.round(reqtemp.round(1) * 2) / 2.0f
-	} else {
-		temp = reqtemp.round(0).toInteger()
-	}
-	def tempUnit = state?.tempUnit
-	def canHeat = state?.can_heat.toBoolean()
+    def canHeat = state?.can_heat.toBoolean()
 	def result = false
-    
-    log.debug "Heat Temp Received: ${temp} (${tempUnit})"
+                
+    log.debug "Heat Temp Received: ${reqtemp} (${tempUnit})"
     if (state?.present && canHeat) {
 		switch (tempUnit) {
 			case "C":
+            	temp = Math.round(reqtemp.round(1) * 2) / 2.0f
 				if (temp) {
                     if (temp < 9.0) { temp = 9.0 }
                     if (temp > 32.0 ) { temp = 32.0 }
+                  	log.debug "Sending Heat Temp ($temp)"
 					if (hvacMode == 'auto') {
 					    parent.setTargetTempLow(this, tempUnit, temp)
                         heatingSetpointEvent(temp)
@@ -874,9 +871,11 @@ void setHeatingSetpoint(Double reqtemp) {
             	result = true
 				break
 			case "F":
-				if (temp) {
-                    if (temp < 50.0) { temp = 50 }
-                    if (temp > 90.0) { temp = 90 }
+				temp = reqtemp.round(0).toInteger()
+                if (temp) {
+                    if (temp < 50) { temp = 50 }
+                    if (temp > 90) { temp = 90 }
+                    log.debug "Sending Heat Temp ($temp)"
                     if (hvacMode == 'auto') {
                         parent.setTargetTempLow(this, tempUnit, temp) 
                         heatingSetpointEvent(temp)
@@ -908,28 +907,23 @@ void setCoolingSetpoint(Double reqtemp) {
 	log.trace "setCoolingSetpoint()... ($reqtemp)"
 	def hvacMode = getHvacMode()
 	def temp = 0.0
-	if (wantMetric()) {
-		temp = Math.round(reqtemp.round(1) * 2) / 2.0f
-	} else {
-		temp = reqtemp.round(0).toInteger()
-	}
 	def tempUnit = state?.tempUnit
 	def canCool = state?.can_cool.toBoolean()
 	def result = false
-
-    log.debug "Cool Temp Received: ${temp} (${tempUnit})"
+    
+    log.debug "Cool Temp Received: ${reqtemp} (${tempUnit})"
     if (state?.present && canCool) {
 		switch (tempUnit) {
 			case "C":
+            	temp = Math.round(reqtemp.round(1) * 2) / 2.0f
 				if (temp) {
                     if (temp < 9.0) { temp = 9.0 }
                     if (temp > 32.0) { temp = 32.0 }
-					
+					log.debug "Sending Cool Temp ($temp)"
                     if (hvacMode == 'auto') {
 					    parent.setTargetTempHigh(this, tempUnit, temp) 
                         coolingSetpointEvent(temp)
 					} 
-                
                     if (hvacMode == 'cool') {
                         parent.setTargetTemp(this, tempUnit, temp) 
                         thermostatSetpointEvent(temp)
@@ -939,11 +933,12 @@ void setCoolingSetpoint(Double reqtemp) {
             	result = true
 				break
                 
-			default:
+            case "F":
+				temp = reqtemp.round(0).toInteger()
 				if (temp) {
-                    if (temp < 50.0) { temp = 50 }
-                    if (temp > 90.0) { temp = 90 }
-                    
+                    if (temp < 50) { temp = 50 }
+                    if (temp > 90) { temp = 90 }
+                    log.debug "Sending Cool Temp ($temp)"        
                     if (hvacMode == 'auto') {
                         parent.setTargetTempHigh(this, tempUnit, temp) 
                         coolingSetpointEvent(temp)
@@ -956,6 +951,9 @@ void setCoolingSetpoint(Double reqtemp) {
 				}
             	result = true
             	break
+        	default:
+ 	           	Logger("no Temperature data $tempUnit")
+               	break
 		}
 	} else {
 		log.debug "Skipping cool change"

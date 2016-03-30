@@ -360,10 +360,10 @@ def smokeStateEvent(smoke) {
 		break
     }
     if(!smokeVal.equals(smoke)) {
-	log.debug("Nest Smoke State is: ${smoke} | Original State: (${smokeVal})")
-	sendEvent(name:'Nestsmoke', value: smoke,  descriptionText: "Nest Smoke State is: ${smoke}", displayed: true, isStateChange: true)
+	log.debug("Nest Smoke State is: (${smoke.toString().toUpperCase()}) | Original State: (${smokeVal.toString().toUpperCase()})")
+	sendEvent(name:'Nestsmoke', value: smoke,  descriptionText: "Nest Smoke State is: ${smoke.toString().toUpperCase()}", displayed: true, isStateChange: true)
 	sendEvent(name:'smoke', value: stsmokestatus,  descriptionText: "Smoke State is: ${stsmokestatus}", displayed: true, isStateChange: true)
-    } else { Logger("Smoke State: (${smoke}) | Original State: (${smokeVal})") }
+    } else { Logger("Smoke State: (${smoke.toString().toUpperCase()}) | Original State: (${smokeVal.toString().toUpperCase()})") }
 }
 
 def testingStateEvent(test) {
