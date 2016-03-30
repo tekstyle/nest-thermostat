@@ -162,6 +162,7 @@ def poll() {
 def refresh() {
 	log.debug "refreshing parent..."
     if (state?.testMode) {
+    	log.warn "Test mode is active: nest alarm state data will not be received until it is turned off"
         switch (state?.testMode) {
             case "testSmoke" :
                 alarmStateEvent("", "emergency")
@@ -178,11 +179,11 @@ def refresh() {
             default:
                 state.testMode = false
        			log.warn "Test mode is inactive"
-				break            
-        }
-        parent.refresh()
-  	log.warn "Test mode is active: nest alarm state data will not be received until it is turned off"
-    } else { parent.refresh() }
+				break   
+        }	
+    } 
+    
+       parent.refresh()
 }
 
 def generateEvent(Map results) {	
