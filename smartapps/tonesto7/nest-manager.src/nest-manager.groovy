@@ -770,8 +770,7 @@ def setTargetTemp(child, unit, temp) {
 	if(unit == "C") { 
         	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetC, temp, child)) { runIn(3, "postDevCmd") }
         }
-	else { 
-		temp = temp.round(0)	
+	else {	
         	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetF, temp, child)) { runIn(3, "postDevCmd") }
         }
     	return true
@@ -792,8 +791,7 @@ def setTargetTempLow(child, unit, temp) {
         	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetLowC, temp, child)) { runIn(3, "postDevCmd") }
         }
 	else { 
-		temp = temp.round(0)
-        	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetLowF, temp, child)) { runIn(3, "postDevCmd") } 
+		if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetLowF, temp, child)) { runIn(3, "postDevCmd") } 
         }
     	return true
     }
@@ -812,8 +810,7 @@ def setTargetTempHigh(child, unit, temp) {
 	if(unit == "C") { 
         	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetHighC, temp, child)) { runIn(3, "postDevCmd") }
         }
-	else { 
-		temp = temp.round(0)
+	else {
         	if(sendNestApiCmd(getNestApiUrl(), devId, apiVar().types.tstat, apiVar().objs.targetHighF, temp, child)) { runIn(3, "postDevCmd") }
         }
     	return true
