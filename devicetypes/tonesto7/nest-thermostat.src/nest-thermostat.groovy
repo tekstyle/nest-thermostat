@@ -286,7 +286,7 @@ def generateEvent(Map results) {
     if(results) {
         state.useMilitaryTime = !parent?.settings?.useMilitaryTime ? false : true
         debugOnEvent(parent.settings?.childDebug)
-		tempUnitEvent(results?.temperature_scale)   // Maybe use getTemperatureScale()  // SmartThings built-in to get ST scale rather than Nest scale
+		tempUnitEvent(getTemperatureScale())
 		canHeatCool(results?.can_heat, results?.can_cool)
         hasFan(results?.has_fan.toString())
         presenceEvent(parent?.locationPresence())
@@ -302,7 +302,7 @@ def generateEvent(Map results) {
         apiStatusEvent(parent?.apiIssues())
        
 		def hvacMode = results?.hvac_mode
-		def tempUnit = device.latestValue('temperatureUnit')
+		def tempUnit = state?.tempUnit
 		switch (tempUnit) {
 			case "C":
 				def heatingSetpoint = 0.0
@@ -635,7 +635,7 @@ def getTemp() {
 
 def tempWaitVal() { return parent?.getChildWaitVal() ? parent?.getChildWaitVal().toInteger() : 4 }
 
-def wantMetric() { return (device.currentValue('temperatureUnit') == "C") }
+def wantMetric() { return (state?.tempUnit == "C") }
 
 
 /************************************************************************************************
