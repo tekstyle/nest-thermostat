@@ -98,12 +98,13 @@ metadata {
     			attributeState("default", label:'${currentValue}%', unit:"%")
   			}
   			tileAttribute("device.thermostatOperatingState", key: "OPERATING_STATE") {
-   				attributeState("idle",backgroundColor:"#44b621")
-   				attributeState("heating",backgroundColor:"#ffa81e")
-   				attributeState("fan only",		backgroundColor:"#2ABBF0")
-            	attributeState("pending heat",	backgroundColor:"#2ABBF0")
-            	attributeState("pending cool",	backgroundColor:"#2ABBF0")
-            	attributeState("vent economizer",	backgroundColor:"#2ABBF0")
+   				attributeState("idle",            backgroundColor:"#44B621")
+   				attributeState("heating",         backgroundColor:"#FFA81E")
+                attributeState("cooling",         backgroundColor:"#2ABBF0")
+   				attributeState("fan only",		  backgroundColor:"#145D78")
+            	attributeState("pending heat",	  backgroundColor:"#B27515")
+            	attributeState("pending cool",	  backgroundColor:"#197090")
+            	attributeState("vent economizer", backgroundColor:"#8000FF")
   			}
   			tileAttribute("device.thermostatMode", key: "THERMOSTAT_MODE") {
     			attributeState("off", label:'${name}')
@@ -121,23 +122,7 @@ metadata {
         }
         valueTile("temp2", "device.temperature", width: 2, height: 2, decoration: "flat") {
         	state("default", label:'${currentValue}°', 	icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/nest_like.png", backgroundColors: [
-						// Celsius Color Range
-						[value: 0, color: "#153591"],
-						[value: 7, color: "#1e9cbb"],
-						[value: 15, color: "#90d2a7"],
-						[value: 23, color: "#44b621"],
-						[value: 29, color: "#f1d801"],
-						[value: 33, color: "#d04e00"],
-						[value: 36, color: "#bc2323"],
-						// Fahrenheit Color Range
-						[value: 40, color: "#153591"],
-						[value: 44, color: "#1e9cbb"],
-						[value: 59, color: "#90d2a7"],
-						[value: 74, color: "#44b621"],
-						[value: 84, color: "#f1d801"],
-						[value: 92, color: "#d04e00"],
-						[value: 96, color: "#bc2323"]
-        	])
+						backgroundColors: getTempColors()) 
         }
         standardTile("mode2", "device.thermostatMode", width: 2, height: 2, decoration: "flat") {
 	        state("off",  icon: "https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/nest_off_icon.png")
@@ -249,6 +234,33 @@ def tileSelect() {
                 "lastUpdatedDt", "softwareVer", "debugOn", "devTypeVer"]
     }
 }
+
+def getTempColors() { 
+  def colorMap 
+  if (wantMetric()) { 
+    colorMap = [ 
+      // Celsius Color Range 
+      [value: 0, color: "#153591"], 
+      [value: 7, color: "#1e9cbb"], 
+      [value: 15, color: "#90d2a7"], 
+      [value: 23, color: "#44b621"], 
+      [value: 29, color: "#f1d801"], 
+      [value: 33, color: "#d04e00"], 
+      [value: 36, color: "#bc2323"] 
+          ] 
+  } else { 
+    colorMap = [ 
+      // Fahrenheit Color Range 
+      [value: 40, color: "#153591"], 
+      [value: 44, color: "#1e9cbb"], 
+      [value: 59, color: "#90d2a7"], 
+      [value: 74, color: "#44b621"], 
+      [value: 84, color: "#f1d801"], 
+      [value: 92, color: "#d04e00"], 
+      [value: 96, color: "#bc2323"] 
+          ] 
+  } 
+} 
 
 def initialize() {
 	log.debug "initialize"
