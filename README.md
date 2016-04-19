@@ -83,7 +83,7 @@ _Enabling the GitHub Integration in your IDE is by far the easiest way to instal
 
 #### The Presence, Protect, and Thermostat Device Handlers
  
- * Go to My Device Types in the IDE (Not necessary if you added repository for the app)
+ * Go to "**My Device Handlers**" in the IDE (Not necessary if you added repository for the app)
  * Click on "**Settings**"
  * Click on **Add new repository**
  * Owner: **tonesto7**, Name: **nest-manager**, Branch: **master**
