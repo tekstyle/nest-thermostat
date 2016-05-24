@@ -450,10 +450,10 @@ def softwareVerEvent(ver) {
 
 def tempUnitEvent(unit) {
     def tmpUnit = device.currentState("temperatureUnit")?.value
+    state?.tempUnit = unit
     if(!tmpUnit.equals(unit)) {   
         log.debug("UPDATED | Temperature Unit: (${unit}) | Original State: (${tmpUnit})")
         sendEvent(name:'temperatureUnit', value: unit, descriptionText: "Temperature Unit is now: '${unit}'", displayed: true, isStateChange: true)
-        state?.tempUnit = unit
     } else { Logger("Temperature Unit: (${unit}) | Original State: (${tmpUnit})") }
 }
 
@@ -552,10 +552,10 @@ def hvacModeEvent(mode) {
     def pres = getNestPresence()
     def hvacMode = getHvacMode()
     def newMode = (mode == "heat-cool") ? "auto" : mode
+    state?.hvac_mode = newMode
     if(!hvacMode.equals(newMode)) {
         log.debug("UPDATED | Hvac Mode is (${newMode}) | Original State: (${hvacMode})")
         sendEvent(name: "thermostatMode", value: newMode, descriptionText: "HVAC mode is ${newMode} mode", displayed: true, isStateChange: true)
-        state?.hvac_mode = newMode
     } else { Logger("Hvac Mode is (${newMode}) | Original State: (${hvacMode})") }
 } 
 
