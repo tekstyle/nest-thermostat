@@ -35,12 +35,17 @@ definition(
     appSetting "clientSecret"
 }
 
-def appVersion() { "2.5.9" }
-def appVerDate() { "7-11-2016" }
+def appVersion() { "2.5.10" }
+def appVerDate() { "7-12-2016" }
 def appVerInfo() {
     def str = ""
 
-    str += "V2.5.9 (July 11th, 2016):"
+    str += "V2.5.10 (July 12th, 2016):"
+    str += "\n▔▔▔▔▔▔▔▔▔▔▔"
+    str += "\n • FIXED: Bug in remote sensor fan logic."
+    str += "\n • FIXED: Automation Name did not change After it was Disabled."
+
+    str += "\n\nV2.5.9 (July 11th, 2016):"
     str += "\n▔▔▔▔▔▔▔▔▔▔▔"
     str += "\n • UPDATED: Minor update to remote sensor fan logic and now there debug info is much easier to understand."
     str += "\n • UPDATED: Minor Tweaks to remote sensor temp logic debug logs so it's a little easier to understand."
