@@ -24,7 +24,7 @@ import java.text.SimpleDateFormat
 
 preferences {  }
 
-def devVer() { return "2.5.4" }
+def devVer() { return "2.5.5" }
 
 metadata {
     definition (name: "${textDevName()}", namespace: "tonesto7", author: "Anthony S.") {
@@ -56,6 +56,7 @@ metadata {
         attribute "feelsLike", "string"
         attribute "percentPrecip", "string"
         attribute "uvindex", "string"
+        attribute "dewpoint", "string"
         attribute "visibility", "string"
         attribute "alert", "string"
         attribute "alertKeys", "string"
@@ -193,14 +194,43 @@ def getTimeZone() {
     return tz
 }
 
+def isCodeUpdateAvailable(newVer, curVer) {
+    try {
+        def result = false
+        def latestVer 
+        def versions = [newVer, curVer]
+        if(newVer != curVer) {
+            latestVer = versions?.max { a, b -> 
+                def verA = a?.tokenize('.')
+                def verB = b?.tokenize('.')
+                def commonIndices = Math.min(verA?.size(), verB?.size())
+                for (int i = 0; i < commonIndices; ++i) {
+                    //log.debug "comparing $numA and $numB"
+                    if (verA[i]?.toInteger() != verB[i]?.toInteger()) {
+                        return verA[i]?.toInteger() <=> verB[i]?.toInteger()
+                    }
+                }
+                verA?.size() <=> verB?.size()
+            }
+            result = (latestVer == newVer) ? true : false
+        }
+        //log.debug "type: $type | newVer: $newVer | curVer: $curVer | newestVersion: ${latestVer} | result: $result"
+        return result
+    } catch (ex) {
+        LogAction("isCodeUpdateAvailable Exception: ${ex}", "error", true)
+        sendChildExceptionData("weather", devVer(), ex?.toString(), "isCodeUpdateAvailable")
+    }
+}
+
 def deviceVerEvent(ver) {
     try {
-        def curData = device.currentState("devTypeVer")?.value
+        def curData = device.currentState("devTypeVer")?.value.toString()
         def pubVer = ver ?: null
-        def dVer = devVer() ? devVer() : null
-        def newData = (pubVer != dVer) ? "${dVer}(New: v${pubVer})" : "${dVer}(Current)"
+        def dVer = devVer() ?: null
+        def newData = isCodeUpdateAvailable(pubVer, dVer) ? "${dVer}(New: v${pubVer})" : "${dVer}"
         state?.devTypeVer = newData
-        if(curData != newData) {
+        state?.updateAvailable = isCodeUpdateAvailable(pubVer, dVer)
+        if(!curData?.equals(newData)) {
             Logger("UPDATED | Device Type Version is: (${newData}) | Original State: (${curData})")
             sendEvent(name: 'devTypeVer', value: newData, displayed: false)
         } else { Logger("Device Type Version is: (${newData}) | Original State: (${curData})") }
@@ -292,6 +322,21 @@ def illuminanceEvent(illum) {
     }
 }
 
+def dewpointEvent(Double tempVal) {
+    try {
+        def temp = device.currentState("dewpoint")?.value.toString()
+        def rTempVal = wantMetric() ? tempVal.round(1) : tempVal.round(0).toInteger()
+        if(!temp.equals(rTempVal.toString())) {
+            log.debug("UPDATED | DewPoint Temperature is (${rTempVal}) | Original Temp: (${temp})")
+            sendEvent(name:'dewpoint', value: rTempVal, unit: state?.tempUnit, descriptionText: "Dew point Temperature is ${rTempVal}" , displayed: true, isStateChange: true)
+        } else { Logger("DewPoint Temperature is (${rTempVal}) | Original Temp: (${temp})") }
+    }
+    catch (ex) {
+        log.error "dewpointEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("weather", devVer(), ex.toString(), "dewpointEvent")
+    }
+}
+
 def temperatureEvent(Double tempVal, Double feelsVal) {
     try {
         def temp = device.currentState("temperature")?.value.toString()
@@ -318,6 +363,19 @@ def getTemp() {
     }       
     } catch (ex) { 
         parent?.sendChildExceptionData("weather", devVer(), ex.toString(), "getTemp")
+        return 0 
+    }
+}
+
+def getDewpoint() { 
+    try { 
+     if ( wantMetric() ) {
+         return "${state?.curWeatherDewPoint_c}°C"
+     } else {
+         return	"${state?.curWeatherDewPoint_f}°F"
+    }       
+    } catch (ex) { 
+        parent?.sendChildExceptionData("weather", devVer(), ex.toString(), "getDewpoint")
         return 0 
     }
 }
@@ -353,8 +411,8 @@ def getWeatherConditions(Map weatData) {
             if(cur) {
                 state.curWeather = cur
                 
-                state.curWeatherTemp_f = Math.round(cur?.current_observation?.temp_f)
-                state.curWeatherTemp_c = Math.round(cur?.current_observation?.temp_c)
+                state.curWeatherTemp_f = Math.round(cur?.current_observation?.temp_f).toInteger()
+                state.curWeatherTemp_c = Math.round(cur?.current_observation?.temp_c.toDouble())
                 state.curFeelsTemp_f = Math.round(cur?.current_observation?.feelslike_f as Double)
                 state.curFeelsTemp_c = Math.round(cur?.current_observation?.feelslike_c as Double)
                 state.curWeatherHum = cur?.current_observation?.relative_humidity?.toString().replaceAll("\\%", "")
@@ -366,6 +424,11 @@ def getWeatherConditions(Map weatData) {
                 temperatureEvent( (wantMetric() ? state?.curWeatherTemp_c : state?.curWeatherTemp_f), (wantMetric() ? state?.curFeelsTemp_c : state?.curFeelsTemp_f) )
                 humidityEvent(state?.curWeatherHum)
                 illuminanceEvent(estimateLux(state?.curWeatherIcon))
+                def hum = cur?.current_observation?.relative_humidity?.toString().replaceAll("\\%", "") as Double
+                def Tc = Math.round(cur?.current_observation?.feelslike_c as Double) as Double
+                state.curWeatherDewPoint_c = estimateDewPoint(hum,Tc)
+                state.curWeatherDewPoint_f =  Math.round(state.curWeatherDewPoint_c * 9.0/5.0 + 32.0)
+                dewpointEvent((wantMetric() ? state?.curWeatherDewPoint_c : state?.curWeatherDewPoint_f))
                 sendEvent(name: "weather", value: cur?.current_observation?.weather)
                 sendEvent(name: "weatherIcon", value: state?.curWeatherIcon, displayed:false)
                 def wspeed = 0.0
@@ -540,6 +603,23 @@ private pad(String s, size = 25) {
         parent?.sendChildExceptionData("weather", devVer(), ex.toString(), "pad")
     }
 }
+
+
+private estimateDewPoint(double rh,double t) {
+    def L = Math.log(rh/100)
+    def M = 17.27 * t
+    def N = 237.3 + t
+    def B = (L + (M/N)) / 17.27
+    def dp = (237.3 * B) / (1 - B)
+
+    def t1 = t * 9.0/5.0 + 32
+    def dp1 = 243.04 * ( Math.log(rh / 100) + ( (17.625 * t1) / (243.04 + t1) ) ) / (17.625 - Math.log(rh / 100) - ( (17.625 * t1) / (243.04 + t1) ) ) 
+    dp1 = (dp1 - 32) * 5.0/9.0
+    def ave = (dp + dp1)/2
+    //log.debug "dp: ${dp.round(1)}  dp1: ${dp1.round(1)} ave: ${ave.round(1)}" 
+    return ave.round(1)
+}
+
 
 private estimateLux(weatherIcon) {
     //log.trace "estimateLux ( ${weatherIcon} )"
@@ -816,6 +896,7 @@ def forecastDay(day) {
 
 def getWeatherHtml() {
     try {
+        def updateAvail = !state.updateAvailable ? "" : "<h3>Device Update Available!</h3>"
         def html = """
         <!DOCTYPE html>
         <html>
@@ -831,6 +912,7 @@ def getWeatherHtml() {
             <style type="text/css">
             ${getCSS()}
             </style>
+                ${updateAvail}
                 <div class="container">
                 <h4>Current Weather Conditions</h4>
                 <h3><a href="#openModal">${state?.walert}</a></h3>
@@ -840,6 +922,7 @@ def getWeatherHtml() {
                             <b>Feels Like:</b> ${getFeelslike()} <br>
                             <b>Precip: </b> ${device.currentState("percentPrecip")?.value}% <br>
                             <b>Humidity:</b> ${state?.curWeather?.current_observation?.relative_humidity}<br>
+                            <b>Dew Point: </b>${getDewpoint()}<br>
                             <b>UV Index: </b>${state.curWeather?.current_observation?.UV}<br>
                             <b>Visibility:</b> ${getVisibility()} <br>
                             <b>Lux:</b> ${getLux()}<br>
@@ -868,7 +951,7 @@ def getWeatherHtml() {
                     </div>		
                     <div class="row topBorder">
                     <div class="centerText offset-by-three six columns">
-                        <b>Station Id:</b> ${state?.curWeather?.current_observation?.station_id}
+                        <b>Station Id: ${state?.curWeather?.current_observation?.station_id}</b> 
                         <b>${state?.curWeather?.current_observation?.observation_time}</b>
                     </div>    
                     </div>
