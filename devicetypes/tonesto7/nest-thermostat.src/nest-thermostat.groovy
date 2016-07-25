@@ -25,7 +25,7 @@ import java.text.SimpleDateFormat
 
 preferences {  }
 
-def devVer() { return "2.5.3"}
+def devVer() { return "2.5.6"}
 
 // for the UI
 metadata {
@@ -73,6 +73,14 @@ metadata {
         attribute "apiStatus", "string"
         attribute "hasLeaf", "string"
         attribute "debugOn", "string"
+        attribute "safetyTempMin", "string"
+        attribute "safetyTempMax", "string"
+        attribute "comfortHumidityMax", "string"
+        //attribute "safetyHumidityMin", "string"
+        attribute "comfortDewpointMax", "string"
+        attribute "tempLockOn", "string"
+        attribute "lockedTempMin", "string"
+        attribute "lockedTempMax", "string"
         attribute "devTypeVer", "string"
         attribute "onlineStatus", "string"
         attribute "nestPresence", "string"
@@ -263,7 +271,7 @@ def getTempColors() {
                 [value: 84, color: "#f1d801"],
                 [value: 92, color: "#d04e00"],
                 [value: 96, color: "#bc2323"]
-                ]
+            ]
         }
     }
     catch (ex) {
@@ -302,6 +310,7 @@ def generateEvent(Map eventData) {
             state.nestTimeZone = !location?.timeZone ? eventData.tz : null
             debugOnEvent(eventData?.debug ? true : false)
             tempUnitEvent(getTemperatureScale())
+            if(eventData?.data?.is_locked) { tempLockOnEvent(eventData?.data?.is_locked.toString() == "true" ? true : false) }
             canHeatCool(eventData?.data?.can_heat, eventData?.data?.can_cool)
             hasFan(eventData?.data?.has_fan.toString())
             presenceEvent(eventData?.pres.toString())
@@ -319,7 +328,9 @@ def generateEvent(Map eventData) {
             apiStatusEvent(eventData?.apiIssues)
             state?.childWaitVal = eventData?.childWaitVal.toInteger()
             state?.cssUrl = eventData?.cssUrl.toString()
-        
+            if(eventData?.safetyTemps) { safetyTempsEvent(eventData?.safetyTemps) }
+            if(eventData?.comfortHumidity) { comfortHumidityEvent(eventData?.comfortHumidity) }
+            if(eventData?.comfortDewpoint) { comfortDewpointEvent(eventData?.comfortDewpoint) } 
             def hvacMode = eventData?.data?.hvac_mode
             def tempUnit = state?.tempUnit
             switch (tempUnit) {
@@ -349,6 +360,7 @@ def generateEvent(Map eventData) {
                     thermostatSetpointEvent(targetTemp)
                     coolingSetpointEvent(coolingSetpoint)
                     heatingSetpointEvent(heatingSetpoint)
+                    if(eventData?.data?.locked_temp_min_c && eventData?.data?.locked_temp_max_c) { lockedTempEvent(eventData?.data?.locked_temp_min_c, eventData?.data?.locked_temp_max_c) }
                     break
                     
                 case "F":
@@ -377,6 +389,7 @@ def generateEvent(Map eventData) {
                     thermostatSetpointEvent(targetTemp)
                     coolingSetpointEvent(coolingSetpoint)
                     heatingSetpointEvent(heatingSetpoint)
+                    if(eventData?.data?.locked_temp_min_f && eventData?.data?.locked_temp_max_f) { lockedTempEvent(eventData?.data?.locked_temp_min_f, eventData?.data?.locked_temp_max_f) }
                     break
                 
                 default:
@@ -416,14 +429,43 @@ def getTimeZone() {
     }
 }
 
+def isCodeUpdateAvailable(newVer, curVer) {
+    try {
+        def result = false
+        def latestVer 
+        def versions = [newVer, curVer]
+        if(newVer != curVer) {
+            latestVer = versions?.max { a, b -> 
+                def verA = a?.tokenize('.')
+                def verB = b?.tokenize('.')
+                def commonIndices = Math.min(verA?.size(), verB?.size())
+                for (int i = 0; i < commonIndices; ++i) {
+                    //log.debug "comparing $numA and $numB"
+                    if (verA[i]?.toInteger() != verB[i]?.toInteger()) {
+                        return verA[i]?.toInteger() <=> verB[i]?.toInteger()
+                    }
+                }
+                verA?.size() <=> verB?.size()
+            }
+            result = (latestVer == newVer) ? true : false
+        }
+        //log.debug "type: $type | newVer: $newVer | curVer: $curVer | newestVersion: ${latestVer} | result: $result"
+        return result
+    } catch (ex) {
+        LogAction("isCodeUpdateAvailable Exception: ${ex}", "error", true)
+        sendChildExceptionData("thermostat", devVer(), ex?.toString(), "isCodeUpdateAvailable")
+    }
+}
+
 def deviceVerEvent(ver) {
     try {
-        def curData = device.currentState("devTypeVer")?.value
+        def curData = device.currentState("devTypeVer")?.value.toString()
         def pubVer = ver ?: null
-        def dVer = devVer() ? devVer() : null
-        def newData = (pubVer != dVer) ? "${dVer}(New: v${pubVer})" : "${dVer}(Current)"
+        def dVer = devVer() ?: null
+        def newData = isCodeUpdateAvailable(pubVer, dVer) ? "${dVer}(New: v${pubVer})" : "${dVer}"
         state?.devTypeVer = newData
-        if(curData != newData) {
+        state?.updateAvailable = isCodeUpdateAvailable(pubVer, dVer)
+        if(!curData?.equals(newData)) {
             Logger("UPDATED | Device Type Version is: (${newData}) | Original State: (${curData})")
             sendEvent(name: 'devTypeVer', value: newData, displayed: false)
         } else { Logger("Device Type Version is: (${newData}) | Original State: (${curData})") }
@@ -705,6 +747,113 @@ def operatingStateEvent(operatingState) {
     catch (ex) {
         log.error "operatingStateEvent Exception: ${ex}"
         parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "operatingStateEvent")
+    }
+}
+
+def tempLockOnEvent(isLocked) {
+    try {
+        def curState = device.currentState("tempLockOn")?.value.toString()
+        def newState = isLocked?.toString()
+        state?.hasLeaf = newState
+        if(!curState?.equals(newState)) {
+            log.debug("UPDATED | Temperature Lock is set to (${newState}) | Original State: (${curState})")
+            sendEvent(name:'tempLockOn', value: newState,  descriptionText: "Temperature Lock: ${newState}" , displayed: false, isStateChange: true, state: newState)
+        } else { Logger("Temperature Lock is set to (${newState}) | Original State: (${curState})") }
+    }
+    catch (ex) {
+        log.error "tempLockOnEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "tempLockOnEvent")
+    }
+}
+
+def lockedTempEvent(Double minTemp, Double maxTemp) {
+    try {
+        def curMinTemp = device.currentState("lockedTempMin")?.doubleValue
+        def curMaxTemp = device.currentState("lockedTempMax")?.doubleValue
+        //def rTempVal = wantMetric() ? tempVal.round(1) : tempVal.round(0).toInteger()
+        if(curMinTemp != minTemp || curMaxTemp != maxTemp) {
+            log.debug("UPDATED | Temperature Lock Minimum is (${minTemp}) | Original Temp: (${curMinTemp})")
+            log.debug("UPDATED | Temperature Lock Maximum is (${maxTemp}) | Original Temp: (${curMaxTemp})")
+            sendEvent(name:'lockedTempMin', value: minTemp, unit: state?.tempUnit, descriptionText: "Temperature Lock Minimum is ${minTemp}${state?.tempUnit}" , displayed: true, isStateChange: true)
+            sendEvent(name:'lockedTempMax', value: maxTemp, unit: state?.tempUnit, descriptionText: "Temperature Lock Maximum is ${maxTemp}${state?.tempUnit}" , displayed: true, isStateChange: true)
+        } else { 
+            Logger("Temperature Lock Minimum is (${minTemp}${state?.tempUnit}) | Original Minimum Temp: (${curMinTemp}${state?.tempUnit})")
+            Logger("Temperature Lock Maximum is (${maxTemp}${state?.tempUnit}) | Original Maximum Temp: (${curMaxTemp}${state?.tempUnit})") 
+        }
+    }
+    catch (ex) {
+        log.error "lockedTempEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "lockedTempEvent")
+    }
+}
+
+def safetyTempsEvent(safetyTemps) {
+    try {
+        def curMinTemp = device.currentState("safetyTempMin")?.doubleValue
+        def curMaxTemp = device.currentState("safetyTempMax")?.doubleValue
+        def newMinTemp = safetyTemps?.min.toDouble() ?: 0
+        def newMaxTemp = safetyTemps?.max.toDouble() ?: 0
+        
+        //def rTempVal = wantMetric() ? tempVal.round(1) : tempVal.round(0).toInteger()
+        if(curMinTemp != newMinTemp || curMaxTemp != newMaxTemp) {
+            log.debug("UPDATED | Safety Temperature Minimum is (${newMinTemp}${state?.tempUnit}) | Original Temp: (${curMinTemp}${state?.tempUnit})")
+            log.debug("UPDATED | Safety Temperature Maximum is (${newMaxTemp}${state?.tempUnit}) | Original Temp: (${curMaxTemp}${state?.tempUnit})")
+            sendEvent(name:'safetyTempMin', value: newMinTemp, unit: state?.tempUnit, descriptionText: "Safety Temperature Minimum is ${newMinTemp}${state?.tempUnit}" , displayed: true, isStateChange: true)
+            sendEvent(name:'safetyTempMax', value: newMaxTemp, unit: state?.tempUnit, descriptionText: "Safety Temperature Maximum is ${newMaxTemp}${state?.tempUnit}" , displayed: true, isStateChange: true)
+        } else { 
+            Logger("Safety Temperature Minimum is  (${newMinTemp}${state?.tempUnit}) | Original Minimum Temp: (${curMinTemp}${state?.tempUnit})")
+            Logger("Safety Temperature Maximum is  (${newMaxTemp}${state?.tempUnit}) | Original Maximum Temp: (${curMaxTemp}${state?.tempUnit})") 
+        }
+    }
+    catch (ex) {
+        log.error "safetyTempsEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "safetyTempsEvent")
+    }
+}
+
+def comfortHumidityEvent(comfortHum) {
+    try {
+        //def curMinHum = device.currentState("safetyHumidityMin")?.integerValue
+        def curMaxHum = device.currentState("comfortHumidityMax")?.integerValue
+        //def newMinHum = safetyHum?.min.toInteger() ?: 0
+        //def newMaxHum = safetyHum?.max.toInteger() ?: 0
+        def newMaxHum = comfortHum?.toInteger() ?: 0
+        if(curMaxHum != newMaxHum) {
+            //log.debug("UPDATED | Safety Humidity Minimum is (${newMinHum}) | Original Temp: (${curMinHum})")
+            log.debug("UPDATED | Safety Humidity Maximum is (${newMaxHum}%) | Original Humidity: (${curMaxHum}%)")
+            //sendEvent(name:'safetyHumidityMin', value: newMinHum, unit: "%", descriptionText: "Safety Humidity Minimum is ${newMinHum}" , displayed: true, isStateChange: true)
+            sendEvent(name:'comfortHumidityMax', value: newMaxHum, unit: "%", descriptionText: "Safety Humidity Maximum is ${newMaxHum}%" , displayed: true, isStateChange: true)
+        } else { 
+            //Logger("Humidity Minimum is (${newMinHum}) | Original Minimum Humidity: (${curMinHum})")
+            Logger("Humidity Maximum is (${newMaxHum}%) | Original Maximum Humidity: (${curMaxHum}%)") 
+        }
+    }
+    catch (ex) {
+        log.error "comfortHumidityEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "comfortHumidityEvent")
+    }
+}
+
+def comfortDewpointEvent(comfortDew) {
+    try {
+        //def curMinDew = device.currentState("safetyDewpointMin")?.integerValue
+        def curMaxDew = device.currentState("comfortDewpointMax")?.doubleValue
+        //def newMinDew = safetyDew?.min.toInteger() ?: 0
+        //def newMaxDew = safetyDew?.max.toInteger() ?: 0
+        def newMaxDew = comfortDew?.toDouble() ?: 0.0
+        if(curMaxDew != newMaxDew) {
+            //log.debug("UPDATED | Safety Dewpoint Minimum is (${newMinDew}) | Original Temp: (${curMinDew})")
+            log.debug("UPDATED | Safety Dewpoint Maximum is (${newMaxDew}) | Original Dewpoint: (${curMaxDew})")
+            //sendEvent(name:'safetyDewpointMin', value: newMinDew, unit: "%", descriptionText: "Safety Dewpoint Minimum is ${newMinDew}" , displayed: true, isStateChange: true)
+            sendEvent(name:'comfortDewpointMax', value: newMaxDew, unit: state?.tempUnit, descriptionText: "Safety Dewpoint Maximum is ${newMaxDew}" , displayed: true, isStateChange: true)
+        } else { 
+            //Logger("Humidity Dewpoint is (${newMinDew}) | Original Minimum Dewpoint: (${curMinDew})")
+            Logger("Dewpoint Maximum is (${newMaxDew}) | Original Maximum Dewpoint: (${curMaxDew})") 
+        }
+    }
+    catch (ex) {
+        log.error "comfortDewpointEvent Exception: ${ex}"
+        parent?.sendChildExceptionData("thermostat", devVer(), ex.toString(), "comfortDewpointEvent")
     }
 }
 
@@ -1395,11 +1544,8 @@ void off() {
 void heat() {
     try {
         log.trace "heat()..."
-        def curPres = getNestPresence()
-        if (curPres == "home") {
-            hvacModeEvent("heat") 
-            runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
-        }
+        hvacModeEvent("heat") 
+        runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
     }
     catch (ex) {
         log.error "heat Exception: ${ex}"
@@ -1415,11 +1561,8 @@ void emergencyHeat() {
 void cool() {
     try {
         log.trace "cool()..."
-        def curPres = getNestPresence()
-        if (curPres == "home") {
-            hvacModeEvent("cool") 
-            runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
-        }
+        hvacModeEvent("cool") 
+        runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
     }
     catch (ex) {
         log.error "cool Exception: ${ex}"
@@ -1430,11 +1573,8 @@ void cool() {
 void auto() {
     try {
         log.trace "auto()..."
-        def curPres = getNestPresence()
-        if (curPres == "home" && ( state?.can_heat == true && state?.can_cool == true ) ) {
-            hvacModeEvent("auto") 
-            runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
-        }
+        hvacModeEvent("auto") 
+        runIn( getTempWaitVal() * 2, "doChangeMode", [overwrite: true] )
     }
     catch (ex) {
         log.error "auto Exception: ${ex}"
@@ -1479,12 +1619,9 @@ void setThermostatMode(modeStr) {
 void fanOn() {
     try {
         log.trace "fanOn()..."
-        def curPres = getNestPresence()
-        if( (curPres == "home") && state?.has_fan.toBoolean() ) {
+        if ( state?.has_fan.toBoolean() ) {
             if (parent.setFanMode(this, true) ) { fanModeEvent("true") }
-        } else {
-            log.error "Error setting fanOn" 
-        }
+        } else { log.error "Error setting fanOn" }
     }
     catch (ex) {
         log.error "fanOn Exception: ${ex}"
@@ -1495,12 +1632,9 @@ void fanOn() {
 void fanOff() {
     try {
         log.trace "fanOff()..."
-        def curPres = getNestPresence()
-        if ( (curPres == "home") && state?.has_fan.toBoolean() ) {
+        if ( state?.has_fan.toBoolean() ) {
             if (parent.setFanMode (this, "off") ) { fanModeEvent("false") } 
-        } else {
-            log.error "Error setting fanOff" 
-        }
+        } else { log.error "Error setting fanOff" }
     }
     catch (ex) {
         log.error "fanOff Exception: ${ex}"
@@ -1516,12 +1650,9 @@ void fanCirculate() {
 void fanAuto() {
     try {
         log.trace "fanAuto()..."
-        def curPres = getNestPresence()
-        if ( (curPres == "home") && state?.has_fan.toBoolean() ) {
+        if ( state?.has_fan.toBoolean() ) {
             if (parent.setFanMode(this,false) ) { fanModeEvent("false") }
-        } else {
-            log.error "Error setting fanAuto" 
-        }
+        } else { log.error "Error setting fanAuto" }
     }
     catch (ex) {
         log.error "fanAuto Exception: ${ex}"
@@ -1664,6 +1795,7 @@ def getInfoHtml() {
     try {
         def leafImg = state?.hasLeaf ? "<img src=\"${getImgBase64(getImg("nest_leaf_on.gif"), "gif")}\" class='leafImg'>" : 
                         "<img src=\"${getImgBase64(getImg("nest_leaf_off.gif"), "gif")}\" class='leafImg'>"
+        def updateAvail = !state.updateAvailable ? "" : "<h3>Device Update Available!</h3>"
         def html = """
         <!DOCTYPE html>
         <html>
@@ -1679,6 +1811,7 @@ def getInfoHtml() {
                 <style type="text/css">
                 ${getCSS()}
                 </style>
+                ${updateAvail}
                 <table>
                 <col width="40%">
                 <col width="20%">
